@@ -78,7 +78,19 @@ double opt3001_get_data(I2C_Handle *i2c) {
 
 	// JTKJ: Fill in the i2cMessage data structure with correct values
     //       as shown in the lecture material
+
+    // Transmit and receive buffers for I2C messages
+    uint8_t txBuffer[1]; // Sending one byte
+    uint8_t rxBuffer[2]; // Receiving two bytes
+
+    // I2C message structure
     I2C_Transaction i2cMessage;
+    i2cMessage.slaveAddress = Board_TMP007_ADDR;
+    txBuffer[0] = OPT3001_REG_RESULT;      // Register address to the transmit buffer
+    i2cMessage.writeBuf = txBuffer; // Set transmit buffer
+    i2cMessage.writeCount = 1;      // Transmitting 1 byte
+    i2cMessage.readBuf = rxBuffer;  // Set receive buffer
+    i2cMessage.readCount = 2;       // Receiving 2 bytes
 
 	if (opt3001_get_status(i2c) & OPT3001_DATA_READY) {
 

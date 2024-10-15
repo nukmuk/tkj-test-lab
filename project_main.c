@@ -20,6 +20,7 @@
 #include "Board.h"
 #include "sensors/opt3001.h"
 
+
 /* Task */
 #define STACKSIZE 2048
 Char sensorTaskStack[STACKSIZE];
@@ -96,16 +97,31 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
     I2C_Handle      i2c;
     I2C_Params      i2cParams;
 
+
     // JTKJ: Teht�v� 2. Avaa i2c-v�yl� taskin k�ytt��n
     // JTKJ: Exercise 2. Open the i2c bus
+    I2C_Params_init(&i2cParams);
+    i2cParams.bitRate = I2C_400kHz;
+    // Open the connection
+    i2c = I2C_open(Board_I2C_TMP, &i2cParams);
+    if (i2c == NULL) {
+       System_abort("Error Initializing I2C\n");
+    }
+
 
     // JTKJ: Teht�v� 2. Alusta sensorin OPT3001 setup-funktiolla
     //       Laita enne funktiokutsua eteen 100ms viive (Task_sleep)
     // JTKJ: Exercise 2. Setup the OPT3001 sensor for use
     //       Before calling the setup function, insertt 100ms delay with Task_sleep
 
+    Task_sleep(100000/Clock_tickPeriod);
+     opt3001_setup(&i2c);
+     Task_sleep(100000/Clock_tickPeriod);
+
+
     while (1) {
 
+        System_printf("%d\n", opt3001_get_data(&i2c));
         // JTKJ: Teht�v� 2. Lue sensorilta dataa ja tulosta se Debug-ikkunaan merkkijonona
         // JTKJ: Exercise 2. Read sensor data and print it to the Debug window as string
 
@@ -124,6 +140,8 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
 }
 
 Int main(void) {
+
+
 
     // Task variables
     Task_Handle sensorTaskHandle;
