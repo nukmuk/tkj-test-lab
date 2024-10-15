@@ -55,6 +55,11 @@ PIN_Config ledConfig[] = {
    Board_LED0 | PIN_GPIO_OUTPUT_EN | PIN_GPIO_LOW | PIN_PUSHPULL | PIN_DRVSTR_MAX,
    PIN_TERMINATE // The configuration table is always terminated with this constant
 };
+Char buff[20];
+
+// UART-kirjaston asetukset
+UART_Handle uart;
+UART_Params uartParams;
 
 void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
 
@@ -73,22 +78,56 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
     // JTKJ: Teht�v� 4. Lis�� UARTin alustus: 9600,8n1
     // JTKJ: Exercise 4. Setup here UART connection as 9600,8n1
 
+    Char buff[20];
+
+    // UART-kirjaston asetukset
+    UART_Handle uart;
+    UART_Params uartParams;
+
+    // Alustetaan sarjaliikenne
+    UART_Params_init(&uartParams);
+    uartParams.writeDataMode = UART_DATA_TEXT;
+    uartParams.readDataMode = UART_DATA_TEXT;
+    uartParams.readEcho = UART_ECHO_OFF;
+    uartParams.readMode=UART_MODE_BLOCKING;
+    uartParams.baudRate = 9600; // nopeus 9600baud
+    uartParams.dataLength = UART_LEN_8; // 8
+    uartParams.parityType = UART_PAR_NONE; // n
+    uartParams.stopBits = UART_STOP_ONE; // 1
+
+    // Avataan yhteys laitteen sarjaporttiin vakiossa Board_UART0
+    uart = UART_open(Board_UART0, &uartParams);
+    if (uart == NULL) {
+       System_abort("Error opening the UART");
+    }
+
     while (1) {
 
         // JTKJ: Teht�v� 3. Kun tila on oikea, tulosta sensoridata merkkijonossa debug-ikkunaan
         //       Muista tilamuutos
+
+        if (programState == DATA_READY) {
+            char x[100];
+            sprintf(x, "%f\n", ambientLight);
+
+            System_printf("%s", x);
+            UART_write(uart, x, strlen(x));
+        }
+
         // JTKJ: Exercise 3. Print out sensor data as string to debug window if the state is correct
         //       Remember to modify state
 
         // JTKJ: Teht�v� 4. L�het� sama merkkijono UARTilla
         // JTKJ: Exercise 4. Send the same sensor data string with UART
 
+
+
         // Just for sanity check for exercise, you can comment this out
         System_printf("uartTask\n");
         System_flush();
 
-        // Once per second, you can modify this
-        Task_sleep(1000000 / Clock_tickPeriod);
+        // Once per 100ms, you can modify this
+        Task_sleep(100000 / Clock_tickPeriod);
     }
 }
 
@@ -121,14 +160,19 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
 
     while (1) {
 
-        System_printf("%d\n", opt3001_get_data(&i2c));
+        double lux = opt3001_get_data(&i2c);
+
         // JTKJ: Teht�v� 2. Lue sensorilta dataa ja tulosta se Debug-ikkunaan merkkijonona
         // JTKJ: Exercise 2. Read sensor data and print it to the Debug window as string
 
         // JTKJ: Teht�v� 3. Tallenna mittausarvo globaaliin muuttujaan
         //       Muista tilamuutos
+
         // JTKJ: Exercise 3. Save the sensor value into the global variable
         //       Remember to modify state
+
+        ambientLight = lux;
+        programState = DATA_READY;
 
         // Just for sanity check for exercise, you can comment this out
         System_printf("sensorTask\n");
@@ -157,6 +201,8 @@ Int main(void) {
     // JTKJ: Exercise 2. Initialize i2c bus
     // JTKJ: Teht�v� 4. Ota UART k�ytt��n ohjelmassa
     // JTKJ: Exercise 4. Initialize UART
+
+    Board_initUART();
 
     // JTKJ: Teht�v� 1. Ota painonappi ja ledi ohjelman k�ytt��n
     //       Muista rekister�id� keskeytyksen k�sittelij� painonapille

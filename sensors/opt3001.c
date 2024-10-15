@@ -85,7 +85,7 @@ double opt3001_get_data(I2C_Handle *i2c) {
 
     // I2C message structure
     I2C_Transaction i2cMessage;
-    i2cMessage.slaveAddress = Board_TMP007_ADDR;
+    i2cMessage.slaveAddress = Board_OPT3001_ADDR;
     txBuffer[0] = OPT3001_REG_RESULT;      // Register address to the transmit buffer
     i2cMessage.writeBuf = txBuffer; // Set transmit buffer
     i2cMessage.writeCount = 1;      // Transmitting 1 byte
@@ -96,7 +96,12 @@ double opt3001_get_data(I2C_Handle *i2c) {
 
 		if (I2C_transfer(*i2c, &i2cMessage)) {
 
-	        // JTKJ: Here the conversion from register value to lux
+		    // JTKJ: Here the conversion from register value to lux
+		    uint16_t reg = (rxBuffer[0] << 8) | rxBuffer[1];
+		    uint16_t E = reg >> 12;
+		    uint16_t R = 0x0fff & reg;
+
+		    lux = 0.01 * pow(2, E) * R;
 
 		} else {
 
