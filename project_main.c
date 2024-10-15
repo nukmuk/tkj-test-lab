@@ -61,7 +61,6 @@ void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
     // JTKJ: Exercise 1. Blink either led of the device
 
     // Toggle the state of the LED pin using negation
-    printf("press\n");
     uint_t pinValue = PIN_getOutputValue(Board_LED0);
     pinValue = !pinValue;
     PIN_setOutputValue(ledHandle, Board_LED0, pinValue);
@@ -125,8 +124,6 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
 }
 
 Int main(void) {
-
-    printf("moi");
 
     // Task variables
     Task_Handle sensorTaskHandle;
