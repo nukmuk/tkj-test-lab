@@ -85,8 +85,8 @@ CPP_DEPS :=
 SA_DEPS := 
 C++_DEPS__QUOTED := 
 OPT_DEPS__QUOTED := 
-S_UPPER_DEPS__QUOTED := 
 SA_DEPS__QUOTED := 
+S_UPPER_DEPS__QUOTED := 
 C??_DEPS__QUOTED := 
 S67_DEPS__QUOTED := 
 GEN_MISC_DIRS__QUOTED := 
@@ -124,4 +124,5 @@ GEN_OPTS__QUOTED :=
 # Every subdirectory with source files must be described here
 SUBDIRS := \
 . \
+sensors \
 

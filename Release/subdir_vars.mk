@@ -2,6 +2,8 @@
 # Automatically-generated file. Do not edit!
 ################################################################################
 
+SHELL = cmd.exe
+
 # Add inputs and outputs from these tool invocations to the build variables 
 CFG_SRCS += \
 ../empty.cfg 
@@ -14,7 +16,9 @@ C_SRCS += \
 ../HelloWorld.c \
 ../ccfg.c \
 ../empty.c \
+../project_main.c \
 ../task_example.c \
+../tehtava.c \
 ../uart_task.c 
 
 GEN_CMDS += \
@@ -25,14 +29,16 @@ GEN_FILES += \
 ./configPkg/compiler.opt 
 
 GEN_MISC_DIRS += \
-./configPkg/ 
+./configPkg 
 
 C_DEPS += \
 ./CC2650STK.d \
 ./HelloWorld.d \
 ./ccfg.d \
 ./empty.d \
+./project_main.d \
 ./task_example.d \
+./tehtava.d \
 ./uart_task.d 
 
 GEN_OPTS += \
@@ -43,18 +49,22 @@ OBJS += \
 ./HelloWorld.obj \
 ./ccfg.obj \
 ./empty.obj \
+./project_main.obj \
 ./task_example.obj \
+./tehtava.obj \
 ./uart_task.obj 
 
 GEN_MISC_DIRS__QUOTED += \
-"configPkg/" 
+"configPkg" 
 
 OBJS__QUOTED += \
 "CC2650STK.obj" \
 "HelloWorld.obj" \
 "ccfg.obj" \
 "empty.obj" \
+"project_main.obj" \
 "task_example.obj" \
+"tehtava.obj" \
 "uart_task.obj" 
 
 C_DEPS__QUOTED += \
@@ -62,19 +72,23 @@ C_DEPS__QUOTED += \
 "HelloWorld.d" \
 "ccfg.d" \
 "empty.d" \
+"project_main.d" \
 "task_example.d" \
+"tehtava.d" \
 "uart_task.d" 
 
 GEN_FILES__QUOTED += \
-"configPkg/linker.cmd" \
-"configPkg/compiler.opt" 
+"configPkg\linker.cmd" \
+"configPkg\compiler.opt" 
 
 C_SRCS__QUOTED += \
 "../CC2650STK.c" \
 "../HelloWorld.c" \
 "../ccfg.c" \
 "../empty.c" \
+"../project_main.c" \
 "../task_example.c" \
+"../tehtava.c" \
 "../uart_task.c" 
 
 

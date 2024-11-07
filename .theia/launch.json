@@ -1,0 +1,55 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "CCS Debug",
+            "type": "ccs-debug",
+            "request": "launch"
+        },
+        {
+            "name": "empty_CC2650STK_TI",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "empty_CC2650STK_TI",
+                "resourceId": "/empty_CC2650STK_TI"
+            }
+        },
+        {
+            "name": "empty_CC2650STK_TI (1)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "empty_CC2650STK_TI",
+                "resourceId": "/empty_CC2650STK_TI/tehtava.c"
+            }
+        },
+        {
+            "name": "empty_CC2650STK_TI (2)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "empty_CC2650STK_TI",
+                "resourceId": "/empty_CC2650STK_TI/project_main.c"
+            }
+        },
+        {
+            "name": "empty_CC2650STK_TI (3)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "empty_CC2650STK_TI",
+                "resourceId": "/empty_CC2650STK_TI/Board.h"
+            }
+        },
+        {
+            "name": "empty_CC2650STK_TI (4)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "empty_CC2650STK_TI",
+                "resourceId": "/empty_CC2650STK_TI/sensors/mpu9250.c"
+            }
+        }
+    ]
+}

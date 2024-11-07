@@ -1,0 +1,10 @@
+{
+  "folders": [
+    {
+      "path": ""
+    }
+  ],
+"settings": {
+    "CCS.debug.serial.options.localEcho": false
+}
+}

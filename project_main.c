@@ -1,5 +1,6 @@
 /* C Standard library */
 #include <stdio.h>
+#include <string.h>
 
 /* XDCtools files */
 #include <xdc/std.h>
@@ -33,7 +34,7 @@ enum state programState = WAITING;
 
 // JTKJ: Teht�v� 3. Valoisuuden globaali muuttuja
 // JTKJ: Exercise 3. Global variable for ambient light
-double ambientLight = -1000.0;
+double characterToSend = -1000.0;
 
 // JTKJ: Teht�v� 1. Lis�� painonappien RTOS-muuttujat ja alustus
 // JTKJ: Exercise 1. Add pins RTOS-variables and configuration here
@@ -107,19 +108,14 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
         //       Muista tilamuutos
 
         if (programState == DATA_READY) {
-            char x[100];
-            sprintf(x, "%f\n", ambientLight);
+            char x[16];
+
+            // sprintf(x, "%f\n", ambientLight);
+            sprintf(x, ".\r\n\0");
 
             System_printf("%s", x);
-            UART_write(uart, x, strlen(x));
+            UART_write(uart, x, strlen(x) + 1);
         }
-
-        // JTKJ: Exercise 3. Print out sensor data as string to debug window if the state is correct
-        //       Remember to modify state
-
-        // JTKJ: Teht�v� 4. L�het� sama merkkijono UARTilla
-        // JTKJ: Exercise 4. Send the same sensor data string with UART
-
 
 
         // Just for sanity check for exercise, you can comment this out
@@ -137,7 +133,7 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
     I2C_Params      i2cParams;
 
 
-    // JTKJ: Teht�v� 2. Avaa i2c-v�yl� taskin k�ytt��n
+    // JTKJ: Teht�v� 2. Avaa i2c-v�yl� taskin k�ytt��n  
     // JTKJ: Exercise 2. Open the i2c bus
     I2C_Params_init(&i2cParams);
     i2cParams.bitRate = I2C_400kHz;
@@ -171,7 +167,7 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
         // JTKJ: Exercise 3. Save the sensor value into the global variable
         //       Remember to modify state
 
-        ambientLight = lux;
+        characterToSend = lux;
         programState = DATA_READY;
 
         // Just for sanity check for exercise, you can comment this out
