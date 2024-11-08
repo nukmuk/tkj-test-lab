@@ -64,10 +64,8 @@ static const I2CCC26XX_I2CPinCfg i2cMPUCfg = {
 // enum state { WAITING=1, DATA_READY };
 // enum state programState = WAITING;
 
-// enum character_state {NO_CHARACTER=0,WAITING_FOR_BUZZ,READY_TO_SEND};
 char characterToSend = NULL;
 char characterToBuzz = NULL;
-// enum character_state characterToSend_State = NO_CHARACTER;
 
 static PIN_Handle buttonHandle;
 static PIN_State buttonState;
@@ -101,20 +99,18 @@ PIN_Config cBuzzer[] = {
   PIN_TERMINATE
 };
 
+void print(char* s) {
+    System_printf(s);
+    System_flush();
+}
+
 /* Task Functions */
 void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
 
-    if (characterToSend != NULL) return;
-
-    // System_printf("button press so send space");
-    // System_flush();
+    if (characterToSend != NULL) return;    
 
     characterToSend = ' ';
     characterToBuzz = ' ';
-    // characterToSend_State = WAITING_FOR_BUZZ;
-
-    // System_printf("sended space");
-    // System_flush();
 }
 
 Void uartTaskFxn(UArg arg0, UArg arg1) {
@@ -150,7 +146,6 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
             sprintf(x, "%c\r\n\0", characterToSend);
             characterToSend = NULL;
 
-            // System_printf("%s", x);
             UART_write(uart, x, 4);
         }
 
@@ -158,7 +153,6 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
     }
 }
 
-// blocks the task for the duration!!!!!!!!!
 Void playNoteForMs(PIN_Handle hBuzzer, int frequency, int ms) {
     if (frequency == 0)
         buzzerClose();
@@ -178,24 +172,21 @@ Void buzzerTaskFxn(UArg arg0, UArg arg1) {
             continue;
         }
 
-        if (characterToBuzz == '.'){   
-        characterToBuzz = NULL;
-            playNoteForMs(hBuzzer, 262 + 200, SLEEP_DURATION / 2);
-            // playNoteForMs(hBuzzer, 330, 200);
-            // playNoteForMs(hBuzzer, 392, 200);
-        } else if (characterToBuzz == '-') {
-        characterToBuzz = NULL;
-            playNoteForMs(hBuzzer, 262 + 100, SLEEP_DURATION / 2);
-            // playNoteForMs(hBuzzer, 311, 200);
-            // playNoteForMs(hBuzzer, 392, 200);
-        } else if (characterToBuzz == ' ') {
+        char temp = characterToBuzz;
         characterToBuzz = NULL;
 
-            playNoteForMs(hBuzzer, 262, SLEEP_DURATION / 2);
-            // playNoteForMs(hBuzzer, 311, 200);
-            // playNoteForMs(hBuzzer, 392, 200);
+        int baseFrequency = 262;
+        int delta = 100;
+
+        if (temp == '.'){   
+            playNoteForMs(hBuzzer, baseFrequency + delta * 2, SLEEP_DURATION / 2);
+        } else if (temp == '-') {
+            characterToBuzz = NULL;
+            playNoteForMs(hBuzzer, baseFrequency + delta, SLEEP_DURATION / 2);
+        } else if (temp == ' ') {
+            characterToBuzz = NULL;
+            playNoteForMs(hBuzzer, baseFrequency, SLEEP_DURATION / 2);
         }
-
     }
 }
 
@@ -246,17 +237,11 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
         float threshold = 100.0;
 
         if (gx > threshold) {
-            // System_printf("detected -");
-            // System_flush();
             characterToSend = '-';
             characterToBuzz = '-';
-            // characterToSend_State = WAITING_FOR_BUZZ;
         } else if (gy > threshold) {
             characterToSend = '.';
             characterToBuzz = '.';
-            // System_printf("detected .");
-            // System_flush();
-            // characterToSend_State = WAITING_FOR_BUZZ;
         }
 
         sleepms(SLEEP_DURATION);
