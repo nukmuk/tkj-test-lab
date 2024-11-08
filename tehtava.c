@@ -43,8 +43,6 @@ Char buzzerTaskStack[STACKSIZE];
 
 Void sleepms(int ms);
 
-#define BUZZ_TASK_SLEEP_DURATION 1000/25 // 25hz
-
 static const int SLEEP_DURATION = 40; // 25hz
 
 // MPU power pin global variables
@@ -66,9 +64,10 @@ static const I2CCC26XX_I2CPinCfg i2cMPUCfg = {
 // enum state { WAITING=1, DATA_READY };
 // enum state programState = WAITING;
 
-enum character_state {NO_CHARACTER=0,WAITING_FOR_BUZZ,READY_TO_SEND};
+// enum character_state {NO_CHARACTER=0,WAITING_FOR_BUZZ,READY_TO_SEND};
 char characterToSend = NULL;
-enum character_state characterToSend_State = NO_CHARACTER;
+char characterToBuzz = NULL;
+// enum character_state characterToSend_State = NO_CHARACTER;
 
 static PIN_Handle buttonHandle;
 static PIN_State buttonState;
@@ -104,14 +103,18 @@ PIN_Config cBuzzer[] = {
 
 /* Task Functions */
 void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
-    System_printf("button press so send space");
-    System_flush();
+
+    if (characterToSend != NULL) return;
+
+    // System_printf("button press so send space");
+    // System_flush();
 
     characterToSend = ' ';
-    characterToSend_State = WAITING_FOR_BUZZ;
+    characterToBuzz = ' ';
+    // characterToSend_State = WAITING_FOR_BUZZ;
 
-    System_printf("sended space");
-    System_flush();
+    // System_printf("sended space");
+    // System_flush();
 }
 
 Void uartTaskFxn(UArg arg0, UArg arg1) {
@@ -141,14 +144,13 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
 
     while (1) {
 
-        if (characterToSend_State != READY_TO_SEND) {
+        if (characterToSend != NULL) {
             char x[4];
 
             sprintf(x, "%c\r\n\0", characterToSend);
             characterToSend = NULL;
-            characterToSend_State = NO_CHARACTER;
 
-            System_printf("%s", x);
+            // System_printf("%s", x);
             UART_write(uart, x, 4);
         }
 
@@ -171,24 +173,29 @@ Void playNoteForMs(PIN_Handle hBuzzer, int frequency, int ms) {
 Void buzzerTaskFxn(UArg arg0, UArg arg1) {
     while (1) {
 
-        if (characterToSend_State != WAITING_FOR_BUZZ) {
-            sleepms(BUZZ_TASK_SLEEP_DURATION);
+        if (characterToBuzz == NULL) {
+            sleepms(SLEEP_DURATION / 2);
             continue;
         }
 
-        if (characterToSend == '.'){   
-            playNoteForMs(hBuzzer, 262, 200);
-            playNoteForMs(hBuzzer, 330, 200);
-            playNoteForMs(hBuzzer, 392, 200);
+        if (characterToBuzz == '.'){   
+        characterToBuzz = NULL;
+            playNoteForMs(hBuzzer, 262 + 200, SLEEP_DURATION / 2);
+            // playNoteForMs(hBuzzer, 330, 200);
+            // playNoteForMs(hBuzzer, 392, 200);
+        } else if (characterToBuzz == '-') {
+        characterToBuzz = NULL;
+            playNoteForMs(hBuzzer, 262 + 100, SLEEP_DURATION / 2);
+            // playNoteForMs(hBuzzer, 311, 200);
+            // playNoteForMs(hBuzzer, 392, 200);
+        } else if (characterToBuzz == ' ') {
+        characterToBuzz = NULL;
+
+            playNoteForMs(hBuzzer, 262, SLEEP_DURATION / 2);
+            // playNoteForMs(hBuzzer, 311, 200);
+            // playNoteForMs(hBuzzer, 392, 200);
         }
 
-        else if (characterToSend == '-') {
-            playNoteForMs(hBuzzer, 262, 200);
-            playNoteForMs(hBuzzer, 311, 200);
-            playNoteForMs(hBuzzer, 392, 200);
-        }
-
-        characterToSend_State = READY_TO_SEND;
     }
 }
 
@@ -239,15 +246,17 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
         float threshold = 100.0;
 
         if (gx > threshold) {
-            System_printf("detected -");
-            System_flush();
+            // System_printf("detected -");
+            // System_flush();
             characterToSend = '-';
-            characterToSend_State = WAITING_FOR_BUZZ;
+            characterToBuzz = '-';
+            // characterToSend_State = WAITING_FOR_BUZZ;
         } else if (gy > threshold) {
             characterToSend = '.';
-            System_printf("detected .");
-            System_flush();
-            characterToSend_State = WAITING_FOR_BUZZ;
+            characterToBuzz = '.';
+            // System_printf("detected .");
+            // System_flush();
+            // characterToSend_State = WAITING_FOR_BUZZ;
         }
 
         sleepms(SLEEP_DURATION);
