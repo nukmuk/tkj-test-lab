@@ -26,6 +26,7 @@
 #define STACKSIZE 2048
 Char sensorTaskStack[STACKSIZE];
 Char uartTaskStack[STACKSIZE];
+Char buzzerTaskStack[STACKSIZE];
 
 /* MPU */
 #include <xdc/std.h>
@@ -39,6 +40,12 @@ Char uartTaskStack[STACKSIZE];
 #include <ti/drivers/pin/PINCC26XX.h>
 #include "Board.h"
 #include "sensors/mpu9250.h"
+
+Void sleepms(int ms);
+
+#define BUZZ_TASK_SLEEP_DURATION 1000/25 // 25hz
+
+static const int SLEEP_DURATION = 40; // 25hz
 
 // MPU power pin global variables
 static PIN_Handle hMpuPin;
@@ -59,7 +66,9 @@ static const I2CCC26XX_I2CPinCfg i2cMPUCfg = {
 // enum state { WAITING=1, DATA_READY };
 // enum state programState = WAITING;
 
+enum character_state {NO_CHARACTER=0,WAITING_FOR_BUZZ,READY_TO_SEND};
 char characterToSend = NULL;
+enum character_state characterToSend_State = NO_CHARACTER;
 
 static PIN_Handle buttonHandle;
 static PIN_State buttonState;
@@ -85,17 +94,26 @@ Char buff[20];
 UART_Handle uart;
 UART_Params uartParams;
 
+/* Buzzer globals */
+static PIN_Handle hBuzzer;
+static PIN_State sBuzzer;
+PIN_Config cBuzzer[] = {
+  Board_BUZZER | PIN_GPIO_OUTPUT_EN | PIN_GPIO_LOW | PIN_PUSHPULL | PIN_DRVSTR_MAX,
+  PIN_TERMINATE
+};
+
+/* Task Functions */
 void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
     System_printf("button press so send space");
     System_flush();
 
     characterToSend = ' ';
+    characterToSend_State = WAITING_FOR_BUZZ;
 
     System_printf("sended space");
     System_flush();
 }
 
-/* Task Functions */
 Void uartTaskFxn(UArg arg0, UArg arg1) {
 
     Char buff[20];
@@ -123,26 +141,59 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
 
     while (1) {
 
-        if (characterToSend != NULL) {
+        if (characterToSend_State != READY_TO_SEND) {
             char x[4];
 
-            // sprintf(x, "%f\n", ambientLight);
             sprintf(x, "%c\r\n\0", characterToSend);
             characterToSend = NULL;
+            characterToSend_State = NO_CHARACTER;
 
             System_printf("%s", x);
             UART_write(uart, x, 4);
         }
 
-
-        // Just for sanity check for exercise, you can comment this out
-        // System_printf("uartTask\n");
-        // System_flush();
-
-        // Sleep 100ms
-        Task_sleep(100000 / Clock_tickPeriod);
+        sleepms(SLEEP_DURATION);
     }
+}
 
+// blocks the task for the duration!!!!!!!!!
+Void playNoteForMs(PIN_Handle hBuzzer, int frequency, int ms) {
+    if (frequency == 0)
+        buzzerClose();
+    else {
+        buzzerOpen(hBuzzer);
+        buzzerSetFrequency(frequency);
+        sleepms(ms);
+        buzzerClose();
+    }
+}
+
+Void buzzerTaskFxn(UArg arg0, UArg arg1) {
+    while (1) {
+
+        if (characterToSend_State != WAITING_FOR_BUZZ) {
+            sleepms(BUZZ_TASK_SLEEP_DURATION);
+            continue;
+        }
+
+        if (characterToSend == '.'){   
+            playNoteForMs(hBuzzer, 262, 200);
+            playNoteForMs(hBuzzer, 330, 200);
+            playNoteForMs(hBuzzer, 392, 200);
+        }
+
+        else if (characterToSend == '-') {
+            playNoteForMs(hBuzzer, 262, 200);
+            playNoteForMs(hBuzzer, 311, 200);
+            playNoteForMs(hBuzzer, 392, 200);
+        }
+
+        characterToSend_State = READY_TO_SEND;
+    }
+}
+
+Void sleepms(int ms) {
+    Task_sleep(ms * 1000 / Clock_tickPeriod);
 }
 
 Void sensorTaskFxn(UArg arg0, UArg arg1) {
@@ -160,7 +211,7 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
     PIN_setOutputValue(hMpuPin,Board_MPU_POWER, Board_MPU_POWER_ON);
 
     // Wait 100ms for the MPU sensor to power up
-    Task_sleep(100000 / Clock_tickPeriod);
+    sleepms(100);
     System_printf("MPU9250: Power ON\n");
     System_flush();
 
@@ -185,24 +236,21 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
 
         char x[100];
 
-        // sprintf(x, "sensorTask, %f, %f, %f, %f, %f, %f", ax, ay, az, gx, gy, gz);
-        // System_printf("%s", x);
-        // System_flush();
-
         float threshold = 100.0;
 
         if (gx > threshold) {
             System_printf("detected -");
             System_flush();
             characterToSend = '-';
+            characterToSend_State = WAITING_FOR_BUZZ;
         } else if (gy > threshold) {
             characterToSend = '.';
             System_printf("detected .");
             System_flush();
+            characterToSend_State = WAITING_FOR_BUZZ;
         }
 
-        // Sleep 100ms
-        Task_sleep(100000 / Clock_tickPeriod);
+        sleepms(SLEEP_DURATION);
     }
 
 }
@@ -214,22 +262,12 @@ Int main(void) {
     Task_Params sensorTaskParams;
     Task_Handle uartTaskHandle;
     Task_Params uartTaskParams;
+    Task_Handle buzzerTaskHandle;
+    Task_Params buzzerTaskParams;
 
     // Initialize board
     Board_initGeneral();
-
-    
-    // JTKJ: Teht�v� 2. Ota i2c-v�yl� k�ytt��n ohjelmassa
-    // JTKJ: Exercise 2. Initialize i2c bus
-    // JTKJ: Teht�v� 4. Ota UART k�ytt��n ohjelmassa
-    // JTKJ: Exercise 4. Initialize UART
-
     Board_initUART();
-
-    // JTKJ: Teht�v� 1. Ota painonappi ja ledi ohjelman k�ytt��n
-    //       Muista rekister�id� keskeytyksen k�sittelij� painonapille
-    // JTKJ: Exercise 1. Open the button and led pins
-    //       Remember to register the above interrupt handler for button
 
     // Enable the pins for use in the program
     buttonHandle = PIN_open(&buttonState, buttonConfig);
@@ -239,6 +277,10 @@ Int main(void) {
     ledHandle = PIN_open(&ledState, ledConfig);
     if(!ledHandle) {
        System_abort("Error initializing LED pins\n");
+    }
+    hBuzzer = PIN_open(&sBuzzer, cBuzzer);
+    if (hBuzzer == NULL) {
+        System_abort("Pin open failed!");
     }
 
     // Set the button pin’s interrupt handler to function buttonFxn
@@ -263,6 +305,15 @@ Int main(void) {
     uartTaskHandle = Task_create(uartTaskFxn, &uartTaskParams, NULL);
     if (uartTaskHandle == NULL) {
         System_abort("Task create failed!");
+    }
+
+    
+    Task_Params_init(&buzzerTaskParams);
+    buzzerTaskParams.stackSize = STACKSIZE;
+    buzzerTaskParams.stack = &buzzerTaskStack;
+    buzzerTaskHandle = Task_create((Task_FuncPtr)buzzerTaskFxn, &buzzerTaskParams, NULL);
+    if (buzzerTaskHandle == NULL) {
+        System_abort("Buzzer task create failed!");
     }
 
     /* Sanity check */

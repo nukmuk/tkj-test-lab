@@ -34,7 +34,7 @@ enum state programState = WAITING;
 
 // JTKJ: Teht�v� 3. Valoisuuden globaali muuttuja
 // JTKJ: Exercise 3. Global variable for ambient light
-double characterToSend = -1000.0;
+double characterToSendAndState = -1000.0;
 
 // JTKJ: Teht�v� 1. Lis�� painonappien RTOS-muuttujat ja alustus
 // JTKJ: Exercise 1. Add pins RTOS-variables and configuration here
@@ -167,7 +167,7 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
         // JTKJ: Exercise 3. Save the sensor value into the global variable
         //       Remember to modify state
 
-        characterToSend = lux;
+        characterToSendAndState = lux;
         programState = DATA_READY;
 
         // Just for sanity check for exercise, you can comment this out
