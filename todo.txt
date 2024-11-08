@@ -1,0 +1,3 @@
+led for receive
+state machine for input gyro thing so no duplicate inputs
+make other button toggle between send and only receive mode
