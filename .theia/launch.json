@@ -50,6 +50,24 @@
                 "name": "empty_CC2650STK_TI",
                 "resourceId": "/empty_CC2650STK_TI/sensors/mpu9250.c"
             }
+        },
+        {
+            "name": "empty_CC2650STK_TI (5)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "empty_CC2650STK_TI",
+                "resourceId": "/empty_CC2650STK_TI/buzzer_example.c"
+            }
+        },
+        {
+            "name": "empty_CC2650STK_TI (6)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "empty_CC2650STK_TI",
+                "resourceId": "/empty_CC2650STK_TI/mpu_test.c"
+            }
         }
     ]
 }
