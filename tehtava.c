@@ -27,6 +27,7 @@
 Char sensorTaskStack[STACKSIZE];
 Char uartTaskStack[STACKSIZE];
 Char buzzerTaskStack[STACKSIZE];
+Char receiveTaskStack[STACKSIZE];
 
 /* MPU */
 #include <xdc/std.h>
@@ -42,8 +43,14 @@ Char buzzerTaskStack[STACKSIZE];
 #include "sensors/mpu9250.h"
 
 Void sleepms(int ms);
+Void receiveTaskFxn(UART_Handle handle, void *rxBuf, size_t len);
 
-static const int SLEEP_DURATION = 40; // 25hz
+#define TASK_SLEEP_DURATION 40 // 25hz
+// #define 
+
+    const int DOT_TIME = 1000;
+    const int DASH_TIME = 3000;
+    const int SPACE_TIME = 1000;
 
 // MPU power pin global variables
 static PIN_Handle hMpuPin;
@@ -61,14 +68,16 @@ static const I2CCC26XX_I2CPinCfg i2cMPUCfg = {
     .pinSCL = Board_I2C0_SCL1
 };
 
-// enum state { WAITING=1, DATA_READY };
-// enum state programState = WAITING;
+enum state { MENU=1, SEND /*,RECEIVE*/ };
+enum state programState = MENU;
 
 char characterToSend = NULL;
 char characterToBuzz = NULL;
 
 static PIN_Handle buttonHandle;
 static PIN_State buttonState;
+static PIN_Handle powerButtonHandle;
+static PIN_State powerButtonState;
 static PIN_Handle ledHandle;
 static PIN_State ledState;
 
@@ -77,6 +86,10 @@ static PIN_State ledState;
 
 PIN_Config buttonConfig[] = {
    Board_BUTTON0  | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_NEGEDGE,
+   PIN_TERMINATE // The configuration table is always terminated with this constant
+};
+PIN_Config powerButtonConfig[] = {
+   Board_BUTTON1  | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_NEGEDGE,
    PIN_TERMINATE // The configuration table is always terminated with this constant
 };
 
@@ -99,9 +112,14 @@ PIN_Config cBuzzer[] = {
   PIN_TERMINATE
 };
 
-void print(char* s) {
-    System_printf(s);
+void print(char* s, ...) {
+    va_list args;
+    va_start(args, s);
+
+    System_printf(s, args);
     System_flush();
+
+    va_end(args);
 }
 
 /* Task Functions */
@@ -113,6 +131,8 @@ void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
     characterToBuzz = ' ';
 }
 
+
+Char uartRxBuf[16];
 Void uartTaskFxn(UArg arg0, UArg arg1) {
 
     Char buff[20];
@@ -126,17 +146,21 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
     uartParams.writeDataMode = UART_DATA_TEXT;
     uartParams.readDataMode = UART_DATA_TEXT;
     uartParams.readEcho = UART_ECHO_OFF;
-    uartParams.readMode=UART_MODE_BLOCKING;
+    uartParams.readMode=UART_MODE_CALLBACK;
     uartParams.baudRate = 9600; // nopeus 9600baud
     uartParams.dataLength = UART_LEN_8; // 8
     uartParams.parityType = UART_PAR_NONE; // n
     uartParams.stopBits = UART_STOP_ONE; // 1
+
+    uartParams.readCallback  = &receiveTaskFxn; // Käsittelijäfunktio
 
     // Avataan yhteys laitteen sarjaporttiin vakiossa Board_UART0
     uart = UART_open(Board_UART0, &uartParams);
     if (uart == NULL) {
        System_abort("Error opening the UART");
     }
+
+    UART_read(uart, &uartRxBuf, 1);
 
     while (1) {
 
@@ -149,7 +173,7 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
             UART_write(uart, x, 4);
         }
 
-        sleepms(SLEEP_DURATION);
+        sleepms(TASK_SLEEP_DURATION);
     }
 }
 
@@ -168,7 +192,7 @@ Void buzzerTaskFxn(UArg arg0, UArg arg1) {
     while (1) {
 
         if (characterToBuzz == NULL) {
-            sleepms(SLEEP_DURATION / 2);
+            sleepms(TASK_SLEEP_DURATION / 2);
             continue;
         }
 
@@ -179,15 +203,87 @@ Void buzzerTaskFxn(UArg arg0, UArg arg1) {
         int delta = 100;
 
         if (temp == '.'){   
-            playNoteForMs(hBuzzer, baseFrequency + delta * 2, SLEEP_DURATION / 2);
+            playNoteForMs(hBuzzer, baseFrequency + delta * 2, TASK_SLEEP_DURATION / 2);
         } else if (temp == '-') {
             characterToBuzz = NULL;
-            playNoteForMs(hBuzzer, baseFrequency + delta, SLEEP_DURATION / 2);
+            playNoteForMs(hBuzzer, baseFrequency + delta, TASK_SLEEP_DURATION / 2);
         } else if (temp == ' ') {
             characterToBuzz = NULL;
-            playNoteForMs(hBuzzer, baseFrequency, SLEEP_DURATION / 2);
+            playNoteForMs(hBuzzer, baseFrequency, TASK_SLEEP_DURATION / 2);
         }
     }
+}
+
+void receiveTaskFxn(UART_Handle handle, void *rxBuf, size_t len) {
+    char* input = (char*)rxBuf;
+    size_t i = 0;
+    while (i < len) {
+        switch (input[i]) {
+            case '.':
+                print(".");
+                break;
+            case '-':
+                print("-");
+                break;
+            case ' ':
+                print(" ");
+                break;
+            default:
+                // print("%c", input[i]);
+                break;
+        }
+        i++;
+    }
+
+    // PIN_setOutputValue(ledHandle, Board_LED0, 1);
+
+    // switch (input) {
+    //     case '.':
+    //         sleepms(DOT_TIME);
+    //         break;
+    //     case '-':
+    //         sleepms(DASH_TIME);
+    //         break;
+    //     case ' ':
+    //         sleepms(SPACE_TIME);
+    //         break;
+    // }
+
+    // sleepms(SPACE_TIME);
+    // PIN_setOutputValue(ledHandle, Board_LED0, 0);
+    
+
+    UART_read(handle, &rxBuf, 1);
+/*return;
+    while (1) {
+
+        print("Reading");
+
+        // Receive one character at a time into the input variable
+        // UART_read(uart, &input, 1);
+
+        print("Input: %c", input);
+
+        PIN_setOutputValue(ledHandle, Board_LED0, 1);
+
+        switch (input) {
+            case '.':
+                sleepms(DOT_TIME);
+                break;
+            case '-':
+                sleepms(DASH_TIME);
+                break;
+            case ' ':
+                sleepms(SPACE_TIME);
+                break;
+        }
+
+        sleepms(SPACE_TIME);
+        PIN_setOutputValue(ledHandle, Board_LED0, 0);
+        
+        // Politely sleep for one second
+        Task_sleep(1000000L / Clock_tickPeriod); 
+    }*/
 }
 
 Void sleepms(int ms) {
@@ -244,7 +340,7 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
             characterToBuzz = '.';
         }
 
-        sleepms(SLEEP_DURATION);
+        sleepms(TASK_SLEEP_DURATION);
     }
 
 }
@@ -258,6 +354,8 @@ Int main(void) {
     Task_Params uartTaskParams;
     Task_Handle buzzerTaskHandle;
     Task_Params buzzerTaskParams;
+    Task_Handle receiveTaskHandle;
+    Task_Params receiveTaskParams;
 
     // Initialize board
     Board_initGeneral();
@@ -267,6 +365,10 @@ Int main(void) {
     buttonHandle = PIN_open(&buttonState, buttonConfig);
     if(!buttonHandle) {
        System_abort("Error initializing button pins\n");
+    }
+    powerButtonHandle = PIN_open(&powerButtonState, powerButtonConfig);
+    if(!powerButtonHandle) {
+       System_abort("Error initializing powerButton pins\n");
     }
     ledHandle = PIN_open(&ledState, ledConfig);
     if(!ledHandle) {
@@ -280,6 +382,9 @@ Int main(void) {
     // Set the button pin’s interrupt handler to function buttonFxn
     if (PIN_registerIntCb(buttonHandle, &buttonFxn) != 0) {
        System_abort("Error registering button callback function");
+    }
+    if (PIN_registerIntCb(powerButtonHandle, &buttonFxn) != 0) {
+       System_abort("Error registering powerButton callback function");
     }
 
     /* Task */
@@ -305,6 +410,7 @@ Int main(void) {
     Task_Params_init(&buzzerTaskParams);
     buzzerTaskParams.stackSize = STACKSIZE;
     buzzerTaskParams.stack = &buzzerTaskStack;
+    buzzerTaskParams.priority=2;
     buzzerTaskHandle = Task_create((Task_FuncPtr)buzzerTaskFxn, &buzzerTaskParams, NULL);
     if (buzzerTaskHandle == NULL) {
         System_abort("Buzzer task create failed!");
