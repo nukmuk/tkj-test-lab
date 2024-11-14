@@ -296,18 +296,30 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
 	System_printf("MPU9250: Setup and calibration OK\n");
 	System_flush();
 
+    int charDetected = 0;
     while (1) {
 
         mpu9250_get_data(&i2cMPU, &ax, &ay, &az, &gx, &gy, &gz);
 
-        float threshold = 100.0;
+        const float threshold = 100.0;
+
+        if(charDetected) {
+            if ((gx+gy+gz+ax+ay+az) < 10)
+                charDetected = 0;
+                
+            sleepms(TASK_SLEEP_DURATION);
+            continue;
+        }
+
 
         if (gx > threshold) {
             characterToSend = '-';
             characterToBuzz = '-';
+            charDetected = 1;
         } else if (gy > threshold) {
             characterToSend = '.';
             characterToBuzz = '.';
+            charDetected = 1;
         }
 
         sleepms(TASK_SLEEP_DURATION);
