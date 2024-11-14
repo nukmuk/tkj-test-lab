@@ -189,7 +189,50 @@ void buzzCharacter(char c) {
     }
 }
 
+struct Note;
+struct Note {
+    int frequency;
+    int duration;//inverse duration
+};
+struct Chime {
+    struct Note* notes;
+    size_t length;
+    int bpm;
+};
+
+
+void playChime(PIN_Handle hBuzzer, struct Chime* chime) {
+    int beatDuration = 240000 / chime->bpm;
+
+    size_t i;
+    for (i = 0; i < chime->length; i++) {
+        struct Note note = chime->notes[i];
+        if (note.frequency == 0) {
+            buzzerClose();
+        }
+        else {
+            buzzerOpen(hBuzzer);
+            buzzerSetFrequency(note.frequency);
+        }
+        sleepms(beatDuration/note.duration);
+    }
+    buzzerClose();
+}
 Void buzzerTaskFxn(UArg arg0, UArg arg1) {
+    sleepms(1500);
+    struct Note notes[] = {
+        {NOTE_B5, 8},
+        {NOTE_FS6, 8},
+        {NOTE_B6, 8},
+        {NOTE_AS6, 4},
+        {NOTE_FS6, 4},
+    };
+    struct Chime chime = {
+        &notes, 5, 150
+    };
+
+    playChime(hBuzzer, &chime);
+
     while (1) {
 
         if (characterToBuzz == NULL) {
@@ -328,24 +371,6 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
 }
 
 
-// Void startupChimeTaskFxn(UArg arg0, UArg arg1) {
-
-//     struct Note notes[] = {
-//         {NOTE_B5, 8},
-//         {NOTE_FS6, 8},
-//         {NOTE_B6, 8},
-//         {NOTE_AS6, 2},
-//         {0, 2},
-//         {NOTE_FS6, 4},
-//         {0, 2}
-//     };
-//     struct Chime chime = {
-//         &notes, 7, 150
-//     };
-
-//     playChime(hBuzzer, &chime);
-// }
-
 
 Int main(void) {
 
@@ -431,20 +456,6 @@ Int main(void) {
     }
 
 
-    
-
-    // Char chimeStack[128];
-    // Task_Handle chimeTaskHandle;
-    // Task_Params chimeTaskParams;
-    
-    // Task_Params_init(&chimeTaskParams);
-    // chimeTaskParams.stackSize = 128;
-    // chimeTaskParams.stack = &chimeStack;
-    // chimeTaskParams.priority=2;
-    // chimeTaskHandle = Task_create(startupChimeTaskFxn, &chimeTaskParams, NULL);
-    // if (chimeTaskHandle == NULL) {
-    //     System_abort("Task create failed!");
-    // }
     /* Sanity check */
     System_printf("Hello world!\n");
     System_flush();

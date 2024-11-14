@@ -1,3 +1,4 @@
-led for receive message on device from workstation
-state machine for input gyro thing so no duplicate inputs
+-led for receive message on device from workstation
+-state machine for input gyro thing so no duplicate inputs
 make other button toggle between send and only receive mode
+startup chime

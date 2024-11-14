@@ -30,30 +30,4 @@ Void playNoteForMs(PIN_Handle hBuzzer, int frequency, int ms) {
     }
 }
 
-// struct Note;
-// struct Note {
-//     int frequency;
-//     int duration;//inverse duration
-// };
-// struct Chime {
-//     struct Note* notes;
-//     size_t length;
-//     int bpm;
-// };
 
-// void playChime(PIN_Handle hBuzzer, struct Chime* chime) {
-//     int beatDuration = 60000000 / chime->bpm;
-
-//     size_t i;
-//     for (i = 0; i < chime->length; i++) {
-//         struct Note note = chime->notes[i];
-//         if (note.frequency == 0) {
-//             buzzerClose();
-//         }
-//         else {
-//             buzzerOpen(hBuzzer);
-//             buzzerSetFrequency(note.frequency);
-//         }
-//         sleepms(beatDuration/note.duration);
-//     }
-// }
