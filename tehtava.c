@@ -236,23 +236,29 @@ Void ledTaskFxn(UArg arg0, UArg xarg1) {
         char c;
         queue_pop(&receiveQueue, &c);
 
-        // PIN_setOutputValue(ledHandle, Board_LED0, 1);
+        PIN_setOutputValue(ledHandle, Board_LED0, 1);
 
         switch (c) {
             case '.':
                 // print("piste");
-                playNoteForMs(hBuzzer, 500, DOT_TIME);
+                // playNoteForMs(hBuzzer, 500, DOT_TIME);
+                sleepms(DOT_TIME);
                 break;
             case '-':
                 // print("dash");
-                playNoteForMs(hBuzzer, 500, DASH_TIME);
+                // playNoteForMs(hBuzzer, 500, DASH_TIME);
+                sleepms(DASH_TIME);
                 break;
             case ' ':
                 // print("space");
-                playNoteForMs(hBuzzer, 500, SPACE_TIME);
+                // playNoteForMs(hBuzzer, 500, SPACE_TIME);
+                sleepms(SPACE_TIME);
                 break;
         }
-        // sleepms(SPACE_TIME);
+        
+        PIN_setOutputValue(ledHandle, Board_LED0, 0);
+
+        sleepms(SPACE_TIME);
     }   
 }
 
