@@ -3,6 +3,9 @@
 
 #include <stdbool.h>
 
+#include <ti/sysbios/knl/Semaphore.h>
+#include <ti/sysbios/gates/GateMutex.h>
+
 #define QUEUE_SIZE 32  // Adjust size as needed
 
 typedef struct {
@@ -10,6 +13,7 @@ typedef struct {
     int front;
     int rear;
     int count;
+    GateMutex_Handle gate;
 } Queue;
 
 // Initialize the queue
@@ -34,28 +38,37 @@ void queue_init(Queue* q) {
     q->front = 0;
     q->rear = -1;
     q->count = 0;
+    q->gate = GateMutex_create(NULL, NULL);
 }
 
 bool queue_push(Queue* q, char item) {
+    bool success;
+    IArg key = GateMutex_enter(q->gate);
     if (queue_is_full(q)) {
-        return false;
+        success = false;
+    } else {
+        q->rear = (q->rear + 1) % QUEUE_SIZE;
+        q->data[q->rear] = item;
+        q->count++;
+        success = true;
     }
-    
-    q->rear = (q->rear + 1) % QUEUE_SIZE;
-    q->data[q->rear] = item;
-    q->count++;
-    return true;
+    GateMutex_leave(q->gate, key);
+    return success;
 }
 
 bool queue_pop(Queue* q, char* item) {
+    bool success;
+    IArg key = GateMutex_enter(q->gate);
     if (queue_is_empty(q)) {
-        return false;
+        success = false;
+    } else {
+        *item = q->data[q->front];
+        q->front = (q->front + 1) % QUEUE_SIZE;
+        q->count--;
+        success = true;
     }
-    
-    *item = q->data[q->front];
-    q->front = (q->front + 1) % QUEUE_SIZE;
-    q->count--;
-    return true;
+    GateMutex_leave(q->gate, key);
+    return success;
 }
 
 bool queue_is_empty(Queue* q) {

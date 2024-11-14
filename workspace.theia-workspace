@@ -4,7 +4,10 @@
       "path": ""
     }
   ],
-"settings": {
-    "CCS.debug.serial.options.localEcho": false
-}
+  "settings": {
+    "CCS.debug.serial.options.localEcho": false,
+    "[c]": {
+      "editor.defaultFormatter": "xaver.clang-format"
+    }
+  }
 }

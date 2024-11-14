@@ -68,6 +68,24 @@
                 "name": "empty_CC2650STK_TI",
                 "resourceId": "/empty_CC2650STK_TI/mpu_test.c"
             }
+        },
+        {
+            "name": "empty_CC2650STK_TI (7)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "empty_CC2650STK_TI",
+                "resourceId": "/empty_CC2650STK_TI/util.h"
+            }
+        },
+        {
+            "name": "empty_CC2650STK_TI (8)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "empty_CC2650STK_TI",
+                "resourceId": "/empty_CC2650STK_TI/queue.h"
+            }
         }
     ]
 }

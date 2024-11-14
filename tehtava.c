@@ -27,7 +27,7 @@
 Char sensorTaskStack[STACKSIZE];
 Char uartTaskStack[STACKSIZE];
 Char buzzerTaskStack[STACKSIZE];
-Char receiveTaskStack[STACKSIZE];
+Char ledTaskStack[STACKSIZE];
 
 /* MPU */
 #include <xdc/std.h>
@@ -42,15 +42,16 @@ Char receiveTaskStack[STACKSIZE];
 #include "Board.h"
 #include "sensors/mpu9250.h"
 
-Void sleepms(int ms);
-Void receiveTaskFxn(UART_Handle handle, void *rxBuf, size_t len);
+#include "queue.h"
+#include "util.h"
+
+Void uartReadCallbackFxn(UART_Handle handle, void *rxBuf, size_t len);
 
 #define TASK_SLEEP_DURATION 40 // 25hz
-// #define 
 
-    const int DOT_TIME = 1000;
-    const int DASH_TIME = 3000;
-    const int SPACE_TIME = 1000;
+const int DOT_TIME = 100;
+const int DASH_TIME = 300;
+const int SPACE_TIME = 500;
 
 // MPU power pin global variables
 static PIN_Handle hMpuPin;
@@ -112,15 +113,7 @@ PIN_Config cBuzzer[] = {
   PIN_TERMINATE
 };
 
-void print(char* s, ...) {
-    va_list args;
-    va_start(args, s);
-
-    System_printf(s, args);
-    System_flush();
-
-    va_end(args);
-}
+Queue receiveQueue;
 
 /* Task Functions */
 void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
@@ -129,6 +122,14 @@ void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
 
     characterToSend = ' ';
     characterToBuzz = ' ';
+}
+
+void uart_sendCharacter(UART_Handle uart, char c) {
+    char x[4];
+
+    sprintf(x, "%c\r\n\0", characterToSend);
+
+    UART_write(uart, x, 4);
 }
 
 
@@ -152,7 +153,7 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
     uartParams.parityType = UART_PAR_NONE; // n
     uartParams.stopBits = UART_STOP_ONE; // 1
 
-    uartParams.readCallback  = &receiveTaskFxn; // Käsittelijäfunktio
+    uartParams.readCallback  = &uartReadCallbackFxn; // Käsittelijäfunktio
 
     // Avataan yhteys laitteen sarjaporttiin vakiossa Board_UART0
     uart = UART_open(Board_UART0, &uartParams);
@@ -160,31 +161,31 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
        System_abort("Error opening the UART");
     }
 
-    UART_read(uart, &uartRxBuf, 1);
+    UART_read(uart, uartRxBuf, 1);
 
     while (1) {
 
         if (characterToSend != NULL) {
-            char x[4];
-
-            sprintf(x, "%c\r\n\0", characterToSend);
+            uart_sendCharacter(uart, characterToSend);
             characterToSend = NULL;
 
-            UART_write(uart, x, 4);
         }
-
         sleepms(TASK_SLEEP_DURATION);
     }
 }
 
-Void playNoteForMs(PIN_Handle hBuzzer, int frequency, int ms) {
-    if (frequency == 0)
-        buzzerClose();
-    else {
-        buzzerOpen(hBuzzer);
-        buzzerSetFrequency(frequency);
-        sleepms(ms);
-        buzzerClose();
+void buzzCharacter(char c) {
+    int baseFrequency = 262;
+    int delta = 100;
+
+    if (c == '.') {
+        playNoteForMs(hBuzzer, baseFrequency + delta * 2, TASK_SLEEP_DURATION / 2);
+    } else if (c == '-') {
+        characterToBuzz = NULL;
+        playNoteForMs(hBuzzer, baseFrequency + delta, TASK_SLEEP_DURATION / 2);
+    } else if (c == ' ') {
+        characterToBuzz = NULL;
+        playNoteForMs(hBuzzer, baseFrequency, TASK_SLEEP_DURATION / 2);
     }
 }
 
@@ -196,98 +197,63 @@ Void buzzerTaskFxn(UArg arg0, UArg arg1) {
             continue;
         }
 
-        char temp = characterToBuzz;
+        buzzCharacter(characterToBuzz);
         characterToBuzz = NULL;
-
-        int baseFrequency = 262;
-        int delta = 100;
-
-        if (temp == '.'){   
-            playNoteForMs(hBuzzer, baseFrequency + delta * 2, TASK_SLEEP_DURATION / 2);
-        } else if (temp == '-') {
-            characterToBuzz = NULL;
-            playNoteForMs(hBuzzer, baseFrequency + delta, TASK_SLEEP_DURATION / 2);
-        } else if (temp == ' ') {
-            characterToBuzz = NULL;
-            playNoteForMs(hBuzzer, baseFrequency, TASK_SLEEP_DURATION / 2);
-        }
     }
 }
 
-void receiveTaskFxn(UART_Handle handle, void *rxBuf, size_t len) {
+void uartReadCallbackFxn(UART_Handle handle, void *rxBuf, size_t len) {
     char* input = (char*)rxBuf;
     size_t i = 0;
     while (i < len) {
         switch (input[i]) {
             case '.':
-                print(".");
+                // print(".");
+                queue_push(&receiveQueue, '.');
+                // PIN_setOutputValue(ledHandle, Board_LED0, !PIN_getOutputValue(Board_LED0));
                 break;
             case '-':
-                print("-");
+                // print("-");
+                queue_push(&receiveQueue, '-');
                 break;
             case ' ':
-                print(" ");
-                break;
-            default:
-                // print("%c", input[i]);
+                // print(" ");
+                queue_push(&receiveQueue, ' ');
                 break;
         }
         i++;
     }
-
-    // PIN_setOutputValue(ledHandle, Board_LED0, 1);
-
-    // switch (input) {
-    //     case '.':
-    //         sleepms(DOT_TIME);
-    //         break;
-    //     case '-':
-    //         sleepms(DASH_TIME);
-    //         break;
-    //     case ' ':
-    //         sleepms(SPACE_TIME);
-    //         break;
-    // }
-
-    // sleepms(SPACE_TIME);
-    // PIN_setOutputValue(ledHandle, Board_LED0, 0);
-    
-
-    UART_read(handle, &rxBuf, 1);
-/*return;
-    while (1) {
-
-        print("Reading");
-
-        // Receive one character at a time into the input variable
-        // UART_read(uart, &input, 1);
-
-        print("Input: %c", input);
-
-        PIN_setOutputValue(ledHandle, Board_LED0, 1);
-
-        switch (input) {
-            case '.':
-                sleepms(DOT_TIME);
-                break;
-            case '-':
-                sleepms(DASH_TIME);
-                break;
-            case ' ':
-                sleepms(SPACE_TIME);
-                break;
-        }
-
-        sleepms(SPACE_TIME);
-        PIN_setOutputValue(ledHandle, Board_LED0, 0);
-        
-        // Politely sleep for one second
-        Task_sleep(1000000L / Clock_tickPeriod); 
-    }*/
+    UART_read(handle, rxBuf, 1);
 }
 
-Void sleepms(int ms) {
-    Task_sleep(ms * 1000 / Clock_tickPeriod);
+Void ledTaskFxn(UArg arg0, UArg xarg1) {
+    while (1) {
+        if (queue_is_empty(&receiveQueue)) {
+            sleepms(TASK_SLEEP_DURATION);
+            continue;
+        }
+        sleepms(10);
+        char c;
+        queue_pop(&receiveQueue, &c);
+
+        // PIN_setOutputValue(ledHandle, Board_LED0, 1);
+
+        switch (c) {
+            case '.':
+                // print("piste");
+                playNoteForMs(hBuzzer, 500, DOT_TIME);
+                break;
+            case '-':
+                // print("dash");
+                playNoteForMs(hBuzzer, 500, DASH_TIME);
+                break;
+            case ' ':
+                // print("space");
+                playNoteForMs(hBuzzer, 500, SPACE_TIME);
+                break;
+        }
+        // sleepms(SPACE_TIME);
+    }   
 }
 
 Void sensorTaskFxn(UArg arg0, UArg arg1) {
@@ -328,8 +294,6 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
 
         mpu9250_get_data(&i2cMPU, &ax, &ay, &az, &gx, &gy, &gz);
 
-        char x[100];
-
         float threshold = 100.0;
 
         if (gx > threshold) {
@@ -345,6 +309,26 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
 
 }
 
+
+// Void startupChimeTaskFxn(UArg arg0, UArg arg1) {
+
+//     struct Note notes[] = {
+//         {NOTE_B5, 8},
+//         {NOTE_FS6, 8},
+//         {NOTE_B6, 8},
+//         {NOTE_AS6, 2},
+//         {0, 2},
+//         {NOTE_FS6, 4},
+//         {0, 2}
+//     };
+//     struct Chime chime = {
+//         &notes, 7, 150
+//     };
+
+//     playChime(hBuzzer, &chime);
+// }
+
+
 Int main(void) {
 
     // Task variables
@@ -354,12 +338,14 @@ Int main(void) {
     Task_Params uartTaskParams;
     Task_Handle buzzerTaskHandle;
     Task_Params buzzerTaskParams;
-    Task_Handle receiveTaskHandle;
-    Task_Params receiveTaskParams;
+    Task_Handle ledTaskHandle;
+    Task_Params ledTaskParams;
 
     // Initialize board
     Board_initGeneral();
     Board_initUART();
+
+    queue_init(&receiveQueue);
 
     // Enable the pins for use in the program
     buttonHandle = PIN_open(&buttonState, buttonConfig);
@@ -411,11 +397,36 @@ Int main(void) {
     buzzerTaskParams.stackSize = STACKSIZE;
     buzzerTaskParams.stack = &buzzerTaskStack;
     buzzerTaskParams.priority=2;
-    buzzerTaskHandle = Task_create((Task_FuncPtr)buzzerTaskFxn, &buzzerTaskParams, NULL);
+    buzzerTaskHandle = Task_create(buzzerTaskFxn, &buzzerTaskParams, NULL);
     if (buzzerTaskHandle == NULL) {
         System_abort("Buzzer task create failed!");
     }
 
+
+    Task_Params_init(&ledTaskParams);
+    ledTaskParams.stackSize = STACKSIZE;
+    ledTaskParams.stack = &ledTaskStack;
+    ledTaskParams.priority=1;
+    ledTaskHandle = Task_create(ledTaskFxn, &ledTaskParams, NULL);
+    if (ledTaskHandle == NULL) {
+        System_abort("LED task create failed!");
+    }
+
+
+    
+
+    // Char chimeStack[128];
+    // Task_Handle chimeTaskHandle;
+    // Task_Params chimeTaskParams;
+    
+    // Task_Params_init(&chimeTaskParams);
+    // chimeTaskParams.stackSize = 128;
+    // chimeTaskParams.stack = &chimeStack;
+    // chimeTaskParams.priority=2;
+    // chimeTaskHandle = Task_create(startupChimeTaskFxn, &chimeTaskParams, NULL);
+    // if (chimeTaskHandle == NULL) {
+    //     System_abort("Task create failed!");
+    // }
     /* Sanity check */
     System_printf("Hello world!\n");
     System_flush();
