@@ -18,6 +18,7 @@
 
 /* Board Header files */
 #include "Board.h"
+#include "driverlib/gpio.h"
 #include "sensors/opt3001.h"
 #include "sensors/mpu9250.h"
 
@@ -28,6 +29,7 @@ Char sensorTaskStack[STACKSIZE];
 Char uartTaskStack[STACKSIZE];
 Char buzzerTaskStack[STACKSIZE];
 Char ledTaskStack[STACKSIZE];
+Char menuTaskStack[STACKSIZE];
 
 /* MPU */
 #include <xdc/std.h>
@@ -45,7 +47,11 @@ Char ledTaskStack[STACKSIZE];
 #include "queue.h"
 #include "util.h"
 
+#include "never.h"
+
 Void uartReadCallbackFxn(UART_Handle handle, void *rxBuf, size_t len);
+void activateCurrentMenuSelection();
+void sendAndBuzzSpace();
 
 #define TASK_SLEEP_DURATION 40 // 25hz
 
@@ -55,13 +61,13 @@ const int SPACE_TIME = 500;
 
 // MPU power pin global variables
 static PIN_Handle hMpuPin;
-static PIN_State  MpuPinState;
+// static PIN_State  MpuPinState;
 
 // MPU power pin
-static PIN_Config MpuPinConfig[] = {
-    Board_MPU_POWER  | PIN_GPIO_OUTPUT_EN | PIN_GPIO_HIGH | PIN_PUSHPULL | PIN_DRVSTR_MAX,
-    PIN_TERMINATE
-};
+// static PIN_Config MpuPinConfig[] = {
+//     Board_MPU_POWER  | PIN_GPIO_OUTPUT_EN | PIN_GPIO_HIGH | PIN_PUSHPULL | PIN_DRVSTR_MAX,
+//     PIN_TERMINATE
+// };
 
 // MPU uses its own I2C interface
 static const I2CCC26XX_I2CPinCfg i2cMPUCfg = {
@@ -69,8 +75,11 @@ static const I2CCC26XX_I2CPinCfg i2cMPUCfg = {
     .pinSCL = Board_I2C0_SCL1
 };
 
-enum state { MENU=1, SEND /*,RECEIVE*/ };
+enum state { MENU=1, SEND, RECEIVE, MUSIC };
 enum state programState = MENU;
+int menuSelection = 0;
+
+bool mpuReady = false;
 
 char characterToSend = NULL;
 char characterToBuzz = NULL;
@@ -86,11 +95,11 @@ static PIN_State ledState;
 // The constant BOARD_BUTTON_0 corresponds to one of the buttons
 
 PIN_Config buttonConfig[] = {
-   Board_BUTTON0  | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_NEGEDGE,
+   Board_BUTTON0  | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES,
    PIN_TERMINATE // The configuration table is always terminated with this constant
 };
 PIN_Config powerButtonConfig[] = {
-   Board_BUTTON1  | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_NEGEDGE,
+   Board_BUTTON1  | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES,
    PIN_TERMINATE // The configuration table is always terminated with this constant
 };
 
@@ -118,16 +127,94 @@ Queue receiveQueue;
 /* Task Functions */
 void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
 
-    if (characterToSend != NULL) return;    
+    if (!mpuReady) return;
+
+    bool isRelease = PIN_getInputValue(Board_BUTTON0) == 1;
+
+    switch (programState) {
+        case MENU:
+
+            // System_printf("First press: %d", firstPowerButtonPressInMenu);
+            // System_flush();
+            if (isRelease) {
+                menuSelection -= 1;
+                if (menuSelection == -1) menuSelection = 2;
+                characterToBuzz = '0' + menuSelection; 
+            }
+            else if (PIN_getInputValue(Board_BUTTON1) == 0) {
+                activateCurrentMenuSelection();
+                return;
+            }
+        break;
+        
+        case SEND:
+            if (isRelease) return;
+            sendAndBuzzSpace();
+            break;
+    }
+}
+
+bool firstPowerButtonPressInMenu = false; // So menu button doesn't activate right away when releasing after pressing and entering the menu
+
+void powerButtonFxn(PIN_Handle handle, PIN_Id pinId) {
+
+    if (!mpuReady) return;
+
+    bool isRelease = PIN_getInputValue(Board_BUTTON1) == 1;
+
+    switch(programState) {
+
+        case MENU:
+
+            if (isRelease && firstPowerButtonPressInMenu) {
+                menuSelection = (menuSelection + 1) % 3;
+                characterToBuzz = '0' + menuSelection;
+            } else {
+                if (!firstPowerButtonPressInMenu) {
+                    firstPowerButtonPressInMenu = true;
+                    // System_printf("First press set to true");
+                    // System_flush();
+                }
+                if (PIN_getInputValue(Board_BUTTON0) == 0) {
+                    activateCurrentMenuSelection();
+                    return;
+                }
+            } 
+            break;
+
+        case SEND:
+        case RECEIVE:
+        case MUSIC:
+            if (isRelease) return;
+            characterToBuzz = 'S';
+            programState = MENU;
+            break;
+    }
+}
+
+void sendAndBuzzSpace() {
+    if (characterToSend != NULL) return;
 
     characterToSend = ' ';
     characterToBuzz = ' ';
+}
+
+void activateCurrentMenuSelection() {
+    // System_printf("chose %d", menuSelection);
+    // System_flush();
+    characterToBuzz = 'M';
+    programState = menuSelection + 2;
+    firstPowerButtonPressInMenu = false;
+    // print("Chose %ld", menuSelection);
 }
 
 void uart_sendCharacter(UART_Handle uart, char c) {
     char x[4];
 
     sprintf(x, "%c\r\n\0", characterToSend);
+
+    // System_printf("Sending %s", x);
+    System_flush();
 
     UART_write(uart, x, 4);
 }
@@ -136,7 +223,7 @@ void uart_sendCharacter(UART_Handle uart, char c) {
 Char uartRxBuf[16];
 Void uartTaskFxn(UArg arg0, UArg arg1) {
 
-    Char buff[20];
+    // Char buff[20];
 
     // UART-kirjaston asetukset
     UART_Handle uart;
@@ -165,12 +252,14 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
 
     while (1) {
 
+        sleepms(TASK_SLEEP_DURATION);
+        if (programState == MENU) continue;
+
         if (characterToSend != NULL) {
             uart_sendCharacter(uart, characterToSend);
             characterToSend = NULL;
 
         }
-        sleepms(TASK_SLEEP_DURATION);
     }
 }
 
@@ -178,15 +267,32 @@ void buzzCharacter(char c) {
     int baseFrequency = 262;
     int delta = 100;
 
-    if (c == '.') {
-        playNoteForMs(hBuzzer, baseFrequency + delta * 2, TASK_SLEEP_DURATION / 2);
-    } else if (c == '-') {
-        characterToBuzz = NULL;
-        playNoteForMs(hBuzzer, baseFrequency + delta, TASK_SLEEP_DURATION / 2);
-    } else if (c == ' ') {
-        characterToBuzz = NULL;
-        playNoteForMs(hBuzzer, baseFrequency, TASK_SLEEP_DURATION / 2);
+    int frequency;
+
+    switch (c) {
+        case '.':
+            frequency = baseFrequency + delta * 2;
+            break;
+        case '-':
+            frequency = baseFrequency + delta;
+            break;
+        case ' ':
+            frequency = baseFrequency;
+            break;
+        case '0':
+            frequency = 392;
+            break;
+        case '1':
+            frequency = 392*2;
+            break;
+        case '2':
+            frequency = 392*3;
+            break;
+        case 'M': // When activating selection in menu
+            frequency = baseFrequency + delta * 4;
+            break;
     }
+    playNoteForMs(hBuzzer, frequency, TASK_SLEEP_DURATION / 2);
 }
 
 struct Note;
@@ -235,6 +341,12 @@ Void buzzerTaskFxn(UArg arg0, UArg arg1) {
 
     while (1) {
 
+        if (characterToBuzz == 'S') {
+            characterToBuzz = NULL;
+            playChime(hBuzzer, &chime);
+            continue;
+        }
+
         if (characterToBuzz == NULL) {
             sleepms(TASK_SLEEP_DURATION / 2);
             continue;
@@ -271,6 +383,8 @@ void uartReadCallbackFxn(UART_Handle handle, void *rxBuf, size_t len) {
 
 Void ledTaskFxn(UArg arg0, UArg xarg1) {
     while (1) {
+        // System_printf("led taskin ikuinen elama");
+        // System_flush();
         if (queue_is_empty(&receiveQueue)) {
             sleepms(TASK_SLEEP_DURATION);
             continue;
@@ -279,7 +393,7 @@ Void ledTaskFxn(UArg arg0, UArg xarg1) {
         char c;
         queue_pop(&receiveQueue, &c);
 
-        PIN_setOutputValue(ledHandle, Board_LED0, 1);
+        if (c != ' ') PIN_setOutputValue(ledHandle, Board_LED0, 1);
 
         switch (c) {
             case '.':
@@ -303,6 +417,32 @@ Void ledTaskFxn(UArg arg0, UArg xarg1) {
 
         sleepms(SPACE_TIME);
     }   
+}
+
+Void menuTaskFxn(UArg arg0, UArg xarg1) {
+    while (1) {
+        if (programState != MUSIC) {
+            sleepms(100);
+            continue;
+        }
+
+        int i = 0;
+        while (i < num_notes && programState == MUSIC) {
+            if (melody[i] == 0 && i > 5) {
+                buzzerClose();
+            } else {   
+                buzzerOpen(hBuzzer);
+                buzzerSetFrequency(melody[i]);
+            }
+            Task_sleep((1000000) / Clock_tickPeriod / durations[i]);
+            // Task_sleep((durations[i] * 10000) / Clock_tickPeriod);
+            i++;
+            // System_printf("currently %d", notes[i]);
+            // System_flush();
+        }
+
+        sleepms(2000);
+    }
 }
 
 Void sensorTaskFxn(UArg arg0, UArg arg1) {
@@ -339,8 +479,13 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
 	System_printf("MPU9250: Setup and calibration OK\n");
 	System_flush();
 
+    mpuReady = true;
+
     int charDetected = 0;
     while (1) {
+
+        sleepms(TASK_SLEEP_DURATION);
+        if (programState != SEND) continue;
 
         mpu9250_get_data(&i2cMPU, &ax, &ay, &az, &gx, &gy, &gz);
 
@@ -364,10 +509,7 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
             characterToBuzz = '.';
             charDetected = 1;
         }
-
-        sleepms(TASK_SLEEP_DURATION);
     }
-
 }
 
 
@@ -383,6 +525,8 @@ Int main(void) {
     Task_Params buzzerTaskParams;
     Task_Handle ledTaskHandle;
     Task_Params ledTaskParams;
+    Task_Handle menuTaskHandle;
+    Task_Params menuTaskParams;
 
     // Initialize board
     Board_initGeneral();
@@ -412,7 +556,7 @@ Int main(void) {
     if (PIN_registerIntCb(buttonHandle, &buttonFxn) != 0) {
        System_abort("Error registering button callback function");
     }
-    if (PIN_registerIntCb(powerButtonHandle, &buttonFxn) != 0) {
+    if (PIN_registerIntCb(powerButtonHandle, &powerButtonFxn) != 0) {
        System_abort("Error registering powerButton callback function");
     }
 
@@ -455,10 +599,19 @@ Int main(void) {
         System_abort("LED task create failed!");
     }
 
+    Task_Params_init(&menuTaskParams);
+    menuTaskParams.stackSize = STACKSIZE;
+    menuTaskParams.stack = &menuTaskStack;
+    menuTaskParams.priority=1;
+    menuTaskHandle = Task_create(menuTaskFxn, &menuTaskParams, NULL);
+    if (menuTaskHandle == NULL) {
+        System_abort("Menu task create failed!");
+    }
+
 
     /* Sanity check */
-    System_printf("Hello world!\n");
-    System_flush();
+    // System_printf("Hello world!\n");
+    // System_flush();
 
     /* Start BIOS */
     BIOS_start();
