@@ -3,3 +3,4 @@
 -make other button toggle between send and only receive mode
 -startup chime
 temp sensor ehkä
+add light sensor

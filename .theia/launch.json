@@ -95,6 +95,24 @@
                 "name": "empty_CC2650STK_TI",
                 "resourceId": "/empty_CC2650STK_TI/task_example.c"
             }
+        },
+        {
+            "name": "empty_CC2650STK_TI (10)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "empty_CC2650STK_TI",
+                "resourceId": "/empty_CC2650STK_TI/pitches.h"
+            }
+        },
+        {
+            "name": "empty_CC2650STK_TI (11)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "empty_CC2650STK_TI",
+                "resourceId": "/empty_CC2650STK_TI/never.h"
+            }
         }
     ]
 }

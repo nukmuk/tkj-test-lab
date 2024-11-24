@@ -29,7 +29,7 @@ Char sensorTaskStack[STACKSIZE];
 Char uartTaskStack[STACKSIZE];
 Char buzzerTaskStack[STACKSIZE];
 Char ledTaskStack[STACKSIZE];
-Char menuTaskStack[STACKSIZE];
+Char musicTaskStack[STACKSIZE];
 
 /* MPU */
 #include <xdc/std.h>
@@ -53,21 +53,14 @@ Void uartReadCallbackFxn(UART_Handle handle, void *rxBuf, size_t len);
 void activateCurrentMenuSelection();
 void sendAndBuzzSpace();
 
-#define TASK_SLEEP_DURATION 40 // 25hz
+#define TASK_SLEEP_DURATION 40 // 25 Hz
 
-const int DOT_TIME = 100;
+const int DOT_TIME = 100 / 2;
 const int DASH_TIME = 300;
 const int SPACE_TIME = 500;
 
 // MPU power pin global variables
 static PIN_Handle hMpuPin;
-// static PIN_State  MpuPinState;
-
-// MPU power pin
-// static PIN_Config MpuPinConfig[] = {
-//     Board_MPU_POWER  | PIN_GPIO_OUTPUT_EN | PIN_GPIO_HIGH | PIN_PUSHPULL | PIN_DRVSTR_MAX,
-//     PIN_TERMINATE
-// };
 
 // MPU uses its own I2C interface
 static const I2CCC26XX_I2CPinCfg i2cMPUCfg = {
@@ -79,7 +72,7 @@ enum state { MENU=1, SEND, RECEIVE, MUSIC };
 enum state programState = MENU;
 int menuSelection = 0;
 
-bool mpuReady = false;
+bool menuReady = false;
 
 char characterToSend = NULL;
 char characterToBuzz = NULL;
@@ -125,17 +118,15 @@ PIN_Config cBuzzer[] = {
 Queue receiveQueue;
 
 /* Task Functions */
-void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
+Void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
 
-    if (!mpuReady) return;
+    if (!menuReady) return;
 
     bool isRelease = PIN_getInputValue(Board_BUTTON0) == 1;
 
     switch (programState) {
         case MENU:
 
-            // System_printf("First press: %d", firstPowerButtonPressInMenu);
-            // System_flush();
             if (isRelease) {
                 menuSelection -= 1;
                 if (menuSelection == -1) menuSelection = 2;
@@ -156,9 +147,9 @@ void buttonFxn(PIN_Handle handle, PIN_Id pinId) {
 
 bool firstPowerButtonPressInMenu = false; // So menu button doesn't activate right away when releasing after pressing and entering the menu
 
-void powerButtonFxn(PIN_Handle handle, PIN_Id pinId) {
+Void powerButtonFxn(PIN_Handle handle, PIN_Id pinId) {
 
-    if (!mpuReady) return;
+    if (!menuReady) return;
 
     bool isRelease = PIN_getInputValue(Board_BUTTON1) == 1;
 
@@ -172,8 +163,6 @@ void powerButtonFxn(PIN_Handle handle, PIN_Id pinId) {
             } else {
                 if (!firstPowerButtonPressInMenu) {
                     firstPowerButtonPressInMenu = true;
-                    // System_printf("First press set to true");
-                    // System_flush();
                 }
                 if (PIN_getInputValue(Board_BUTTON0) == 0) {
                     activateCurrentMenuSelection();
@@ -186,9 +175,9 @@ void powerButtonFxn(PIN_Handle handle, PIN_Id pinId) {
         case RECEIVE:
         case MUSIC:
             if (isRelease) return;
-            characterToBuzz = 'S';
             programState = MENU;
-            break;
+            characterToBuzz = 'S';
+            return;
     }
 }
 
@@ -200,30 +189,20 @@ void sendAndBuzzSpace() {
 }
 
 void activateCurrentMenuSelection() {
-    // System_printf("chose %d", menuSelection);
-    // System_flush();
     characterToBuzz = 'M';
-    programState = menuSelection + 2;
+    programState = (enum state)(menuSelection + 2);
     firstPowerButtonPressInMenu = false;
-    // print("Chose %ld", menuSelection);
 }
 
 void uart_sendCharacter(UART_Handle uart, char c) {
     char x[4];
-
     sprintf(x, "%c\r\n\0", characterToSend);
-
-    // System_printf("Sending %s", x);
-    System_flush();
-
     UART_write(uart, x, 4);
 }
 
 
 Char uartRxBuf[16];
 Void uartTaskFxn(UArg arg0, UArg arg1) {
-
-    // Char buff[20];
 
     // UART-kirjaston asetukset
     UART_Handle uart;
@@ -251,14 +230,12 @@ Void uartTaskFxn(UArg arg0, UArg arg1) {
     UART_read(uart, uartRxBuf, 1);
 
     while (1) {
-
         sleepms(TASK_SLEEP_DURATION);
         if (programState == MENU) continue;
 
         if (characterToSend != NULL) {
             uart_sendCharacter(uart, characterToSend);
             characterToSend = NULL;
-
         }
     }
 }
@@ -280,16 +257,16 @@ void buzzCharacter(char c) {
             frequency = baseFrequency;
             break;
         case '0':
-            frequency = 392;
+            frequency = NOTE_B4;
             break;
         case '1':
-            frequency = 392*2;
+            frequency = NOTE_CS5;
             break;
         case '2':
-            frequency = 392*3;
+            frequency = NOTE_DS5;
             break;
         case 'M': // When activating selection in menu
-            frequency = baseFrequency + delta * 4;
+            frequency = NOTE_B5;
             break;
     }
     playNoteForMs(hBuzzer, frequency, TASK_SLEEP_DURATION / 2);
@@ -298,7 +275,7 @@ void buzzCharacter(char c) {
 struct Note;
 struct Note {
     int frequency;
-    int duration;//inverse duration
+    int duration; // inverse duration
 };
 struct Chime {
     struct Note* notes;
@@ -323,6 +300,7 @@ void playChime(PIN_Handle hBuzzer, struct Chime* chime) {
         sleepms(beatDuration/note.duration);
     }
     buzzerClose();
+    if (!menuReady) menuReady = true;
 }
 Void buzzerTaskFxn(UArg arg0, UArg arg1) {
     sleepms(1500);
@@ -334,7 +312,7 @@ Void buzzerTaskFxn(UArg arg0, UArg arg1) {
         {NOTE_FS6, 4},
     };
     struct Chime chime = {
-        &notes, 5, 150
+        notes, 5, 150
     };
 
     playChime(hBuzzer, &chime);
@@ -357,24 +335,12 @@ Void buzzerTaskFxn(UArg arg0, UArg arg1) {
     }
 }
 
-void uartReadCallbackFxn(UART_Handle handle, void *rxBuf, size_t len) {
+Void uartReadCallbackFxn(UART_Handle handle, void *rxBuf, size_t len) {
     char* input = (char*)rxBuf;
     size_t i = 0;
     while (i < len) {
-        switch (input[i]) {
-            case '.':
-                // print(".");
-                queue_push(&receiveQueue, '.');
-                // PIN_setOutputValue(ledHandle, Board_LED0, !PIN_getOutputValue(Board_LED0));
-                break;
-            case '-':
-                // print("-");
-                queue_push(&receiveQueue, '-');
-                break;
-            case ' ':
-                // print(" ");
-                queue_push(&receiveQueue, ' ');
-                break;
+        if (input[i] == '.' || input[i] == '-' || input[i] == ' ') {
+            queue_push(&receiveQueue, input[i]);
         }
         i++;
     }
@@ -383,8 +349,6 @@ void uartReadCallbackFxn(UART_Handle handle, void *rxBuf, size_t len) {
 
 Void ledTaskFxn(UArg arg0, UArg xarg1) {
     while (1) {
-        // System_printf("led taskin ikuinen elama");
-        // System_flush();
         if (queue_is_empty(&receiveQueue)) {
             sleepms(TASK_SLEEP_DURATION);
             continue;
@@ -393,33 +357,35 @@ Void ledTaskFxn(UArg arg0, UArg xarg1) {
         char c;
         queue_pop(&receiveQueue, &c);
 
-        if (c != ' ') PIN_setOutputValue(ledHandle, Board_LED0, 1);
+        if (c != ' ') {
+            PIN_setOutputValue(ledHandle, Board_LED0, 1);
+
+            if (programState == RECEIVE) {
+                buzzerOpen(hBuzzer);
+                buzzerSetFrequency(600);
+            }
+        }
 
         switch (c) {
             case '.':
-                // print("piste");
-                // playNoteForMs(hBuzzer, 500, DOT_TIME);
                 sleepms(DOT_TIME);
                 break;
             case '-':
-                // print("dash");
-                // playNoteForMs(hBuzzer, 500, DASH_TIME);
                 sleepms(DASH_TIME);
                 break;
             case ' ':
-                // print("space");
-                // playNoteForMs(hBuzzer, 500, SPACE_TIME);
                 sleepms(SPACE_TIME);
                 break;
         }
         
         PIN_setOutputValue(ledHandle, Board_LED0, 0);
+        if (programState == RECEIVE) buzzerClose();
 
         sleepms(SPACE_TIME);
     }   
 }
 
-Void menuTaskFxn(UArg arg0, UArg xarg1) {
+Void musicTaskFxn(UArg arg0, UArg xarg1) {
     while (1) {
         if (programState != MUSIC) {
             sleepms(100);
@@ -435,12 +401,8 @@ Void menuTaskFxn(UArg arg0, UArg xarg1) {
                 buzzerSetFrequency(melody[i]);
             }
             Task_sleep((1000000) / Clock_tickPeriod / durations[i]);
-            // Task_sleep((durations[i] * 10000) / Clock_tickPeriod);
             i++;
-            // System_printf("currently %d", notes[i]);
-            // System_flush();
         }
-
         sleepms(2000);
     }
 }
@@ -479,8 +441,6 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
 	System_printf("MPU9250: Setup and calibration OK\n");
 	System_flush();
 
-    mpuReady = true;
-
     int charDetected = 0;
     while (1) {
 
@@ -512,8 +472,6 @@ Void sensorTaskFxn(UArg arg0, UArg arg1) {
     }
 }
 
-
-
 Int main(void) {
 
     // Task variables
@@ -525,8 +483,8 @@ Int main(void) {
     Task_Params buzzerTaskParams;
     Task_Handle ledTaskHandle;
     Task_Params ledTaskParams;
-    Task_Handle menuTaskHandle;
-    Task_Params menuTaskParams;
+    Task_Handle musicTaskHandle;
+    Task_Params musicTaskParams;
 
     // Initialize board
     Board_initGeneral();
@@ -599,12 +557,12 @@ Int main(void) {
         System_abort("LED task create failed!");
     }
 
-    Task_Params_init(&menuTaskParams);
-    menuTaskParams.stackSize = STACKSIZE;
-    menuTaskParams.stack = &menuTaskStack;
-    menuTaskParams.priority=1;
-    menuTaskHandle = Task_create(menuTaskFxn, &menuTaskParams, NULL);
-    if (menuTaskHandle == NULL) {
+    Task_Params_init(&musicTaskParams);
+    musicTaskParams.stackSize = STACKSIZE;
+    musicTaskParams.stack = &musicTaskStack;
+    musicTaskParams.priority=1;
+    musicTaskHandle = Task_create(musicTaskFxn, &musicTaskParams, NULL);
+    if (musicTaskHandle == NULL) {
         System_abort("Menu task create failed!");
     }
 
